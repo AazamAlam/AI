@@ -12,17 +12,30 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    
+    // --- CORRECTED AND MERGED IOS BLOCK ---
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "config": {
+        "googleMapsApiKey": "YOUR_API_KEY_HERE"
+      }
     },
+    
+    // --- CORRECTED AND MERGED ANDROID BLOCK ---
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "config": {
+        "googleMaps": {
+          "apiKey": "YOUR_API_KEY_HERE"
+        }
+      }
     },
+
     "web": {
       "favicon": "./assets/favicon.png"
     }
