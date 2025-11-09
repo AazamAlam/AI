@@ -1,18 +1,17 @@
 // src/data/routeGenerator.ts
 
-import { Route, Coordinates, AStarResult } from '../types'; 
-import { IconNavigation, IconClock, IconShield } from './icons'; 
+import { Route, Coordinates } from '../types';
+import { IconNavigation, IconClock, IconShield } from './icons';
 
 /**
  * Calculates the Accessibility Penalty Cost based on elevation data.
- * NOTE: This function needs to be updated to accept and use OSM data for stairs/ramps 
- * for the next implementation phase. For now, it calculates the penalty based on incline.
+ * The lower the cost, the better the accessibility.
  * @param elevationResults Array of Google Elevation results.
  * @param totalDistanceMeters Total distance of the route in meters.
  * @returns Accessibility cost (higher cost means worse accessibility).
  */
 export const calculateAccessibilityCost = (elevationResults: any[], totalDistanceMeters: number): number => {
-    if (!elevationResults || elevationResults.length < 2) return 500; 
+    if (!elevationResults || elevationResults.length < 2) return 500; // High base penalty if data is missing
     
     let totalUphillClimbMeters = 0;
     let maxSteepnessPercentage = 0;
@@ -38,13 +37,11 @@ export const calculateAccessibilityCost = (elevationResults: any[], totalDistanc
     }
     
     // 1. Base Penalty: Penalty for every meter climbed (Uphill effort)
-    // Weight the climb heavily
     let basePenalty = totalUphillClimbMeters * 5; 
 
     // 2. Steepness Penalty: Heavy penalty for grades over 5% (difficult for accessibility)
     let steepnessPenalty = 0;
     if (maxSteepnessPercentage > 5) {
-        // Apply significant penalty for exceeding 5% grade
         steepnessPenalty = (maxSteepnessPercentage - 5) * 50; 
     }
     
@@ -53,15 +50,9 @@ export const calculateAccessibilityCost = (elevationResults: any[], totalDistanc
 
 
 /**
- * Generates the three distinct routes using the calculated data and the A* result.
+ * Generates the three distinct routes using the calculated data.
  */
-export const generateRoutes = (
-    startCoords: Coordinates, 
-    endCoords: Coordinates, 
-    walkingDirections: any, 
-    baseAccessibilityCost: number, // Cost of the fastest (Blue) route
-    aStarResult: AStarResult | null // A* result for the accessible path
-): Route[] => {
+export const generateRoutes = (startCoords: Coordinates, endCoords: Coordinates, walkingDirections: any, accessibilityCost: number): Route[] => {
     
     const mainRoute = walkingDirections.routes[0];
     const leg = mainRoute.legs[0]; 
@@ -70,59 +61,21 @@ export const generateRoutes = (
     const walkingDuration = leg.duration.text;
     const pathPoints = mainRoute.overview_path.map((p: any) => ({ lat: p.lat(), lng: p.lng() }));
     
-    // --- 1. Scoring Logic ---
-
-    // A. Score Normalization: Max cost dictates how bad 0/100 is.
+    // Normalize Accessibility Cost (0-100 score, higher is better)
+    // Assuming a cost of 1000 is extremely bad (0/100 score)
     const MAX_COST = 1000; 
-    
-    // B. Score for the Fastest Route (Based on BASE COST)
-    const baseNormalizedScore = Math.max(0, 100 - (baseAccessibilityCost / MAX_COST) * 100);
-
-    // C. Data for the Accessible Route (Using A* result if available)
-    let accessiblePathScore = baseNormalizedScore; 
-    let accessiblePathDuration = walkingDuration;
-    let accessiblePathPoints = pathPoints;
-    let accessiblePathDirections = walkingDirections;
-    
-    if (aStarResult) {
-        // Calculate the score for the A* path's raw cost
-        const aStarCost = aStarResult.totalAccessibleCost;
-        accessiblePathScore = Math.max(0, 100 - (aStarCost / MAX_COST) * 100);
-        
-        // Use the actual A* geometry and time
-        accessiblePathDuration = `${aStarResult.totalTime.toFixed(0)} min`;
-        accessiblePathPoints = aStarResult.path;
-        accessiblePathDirections = null; // A* is custom, not from Google Directions
-    }
-
+    const normalizedAccessibilityScore = Math.max(0, 100 - (accessibilityCost / MAX_COST) * 100);
 
     const routes: Route[] = [
-        // --- A: GREEN ROUTE (Accessible - uses A* result) ---
         {
             id: 'A',
-            score: Math.round(accessiblePathScore * 10) / 10,
-            label: `Most Accessible (Time: ${accessiblePathDuration})`, 
+            score: Math.round(normalizedAccessibilityScore * 10) / 10, // Accessible score based on elevation data
+            label: 'Most Accessible (Minimizes Steep Incline)', 
             icon: IconNavigation,
             color: 'bg-green-500',
             borderColor: 'border-green-500',
             isSelected: false,
-            segment: {
-                points: accessiblePathPoints,
-                distance: "N/A", // Custom path, distance is unknown without further calc
-                duration: accessiblePathDuration,
-            },
-            directionsResult: accessiblePathDirections, 
-        },
-        
-        // --- B: BLUE ROUTE (Fastest - uses Directions API) ---
-        {
-            id: 'B',
-            score: 78, // Placeholder score for speed/efficiency
-            label: `Fastest (Walking Route: ${walkingDuration})`, 
-            icon: IconClock,
-            color: 'bg-blue-500',
-            borderColor: 'border-blue-500',
-            isSelected: true,
+            // Uses the same geometry as the fastest route for simplicity, but a unique score/theme
             segment: {
                 points: pathPoints,
                 distance: walkingDistance,
@@ -130,11 +83,24 @@ export const generateRoutes = (
             },
             directionsResult: walkingDirections,
         },
-        
-        // --- C: PURPLE ROUTE (Safest - Mock) ---
+        {
+            id: 'B',
+            score: 78, 
+            label: `Fastest (Walking Route: ${walkingDuration})`, 
+            icon: IconClock,
+            color: 'bg-blue-500',
+            borderColor: 'border-blue-500',
+            isSelected: true, // Selected by default
+            segment: {
+                points: pathPoints,
+                distance: walkingDistance,
+                duration: walkingDuration,
+            },
+            directionsResult: walkingDirections,
+        },
         {
             id: 'C',
-            score: 85, // Mock safety score
+            score: 85, // Safest route (Still mock score/path)
             label: 'Safest at Night (High lighting)',
             icon: IconShield,
             color: 'bg-purple-500',
